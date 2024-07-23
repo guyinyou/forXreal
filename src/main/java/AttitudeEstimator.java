@@ -1,79 +1,83 @@
+import org.apache.commons.math3.complex.Quaternion;
+import org.apache.commons.math3.geometry.euclidean.threed.Rotation;
+import org.apache.commons.math3.geometry.euclidean.threed.RotationOrder;
+import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
+
 public class AttitudeEstimator {
-    private static final float Kp = 10.0f; // proportional gain governs rate of convergence to accelerometer/magnetometer
-    private static final float Ki = 0.008f; // integral gain governs rate of convergence of gyroscope biases
-    private static final float halfT = 0.001f; // half the sample period
-
-    private static float q0 = 1, q1 = 0, q2 = 0, q3 = 0; // quaternion elements representing the estimated orientation
-    private static float exInt = 0, eyInt = 0, ezInt = 0; // scaled integral error
-
-    private static float yaw = 0;
-    private static float pitch = 0;
-    private static float roll = 0;
+    // 假设的四元数表示当前的旋转
+    private Quaternion rotation;
+    // 用作旋转更新的锁对象
+    private final Object lock = new Object();
 
     public void update(AAA.ArknovvReport report) {
-        IMU_Update(1, report.gyro_x, report.gyro_y, report.gyro_z, report.acc_x, report.acc_y, report.acc_z);
+        Vector3D angVel = new Vector3D(report.gyro_x, report.gyro_y, report.gyro_z);
+        updateRotation(0.001f, angVel);
+        System.out.println("roll: " + getRotationVector().getX() + " pitch: " + getRotationVector().getY() + " yaw: " + getRotationVector().getZ());
     }
-    public void IMU_Update(float dt, float gx, float gy, float gz, float ax, float ay, float az) {
-        gx *= dt;
-        gy *= dt;
-        gz *= dt;
-        float norm;
-        float vx, vy, vz;
-        float ex, ey, ez;
+    public AttitudeEstimator() {
+        this(Quaternion.IDENTITY);
+    }
+    public AttitudeEstimator(Quaternion initialRotation) {
+        this.rotation = initialRotation;
+    }
 
-        float q0q0 = q0 * q0;
-        float q0q1 = q0 * q1;
-        float q0q2 = q0 * q2;
-        float q1q1 = q1 * q1;
-        float q1q3 = q1 * q3;
-        float q2q2 = q2 * q2;
-        float q2q3 = q2 * q3;
-        float q3q3 = q3 * q3;
+    // 更新旋转
+    public void updateRotation(float dt, Vector3D angVel) {
+        synchronized (lock) {
+            // 计算角速度向量的长度
+            double angVelLength = angVel.getNorm();
 
-        if (ax * ay * az == 0) {
-            return;
+            // 如果角速度长度不接近零，则执行旋转更新
+            if (angVelLength > 0.00000001f) {
+                // 计算旋转轴，即单位化的角速度向量
+                Vector3D rotAxis = angVel.normalize();
+
+                // 计算旋转角度，即角速度长度乘以时间增量
+                double rotAngle = angVelLength * dt;
+
+                // 创建四元数来表示增量旋转
+                Quaternion deltaRotation = createFromAxisAngle(rotAxis, rotAngle);
+
+                // 将现有旋转和增量旋转结合起来更新旋转
+                rotation = rotation.multiply(deltaRotation);
+            }
+
+            // 归一化四元数以防止误差累积
+            rotation = rotation.normalize();
         }
+    }
 
-        norm = (float) Math.sqrt(ax * ax + ay * ay + az * az); //
-        ax = ax / norm;
-        ay = ay / norm;
-        az = az / norm;
+    // 使用旋转轴和旋转角度创建四元数的示例方法
+    // 注意：根据你使用的数学库的不同，该方法的实现会不同
+    private Quaternion createFromAxisAngle(Vector3D axis, double angle) {
+        // 根据你的四元数库，你可能需要实现该方法。
+        // 下面是使用Apache Commons Math库的示例实现：
+        double halfAngle = angle / 2.0;
+        double sinHalfAngle = Math.sin(halfAngle);
+        return new Quaternion(Math.cos(halfAngle), sinHalfAngle * axis.getX(),
+            sinHalfAngle * axis.getY(), sinHalfAngle * axis.getZ());
+    }
 
-        // estimated direction of gravity and flux (v and w)
-        vx = 2 * (q1q3 - q0q2);
-        vy = 2 * (q0q1 + q2q3);
-        vz = q0q0 - q1q1 - q2q2 + q3q3;
+    // 获取当前的旋转
+    public Quaternion getRotation() {
+        synchronized (lock) {
+            return rotation;
+        }
+    }
 
-        // error is sum of cross product between reference direction of fields and direction measured by sensors
-        ex = (ay * vz - az * vy);
-        ey = (az * vx - ax * vz);
-        ez = (ax * vy - ay * vx);
+    public void resetRotation() {
+        synchronized (lock) {
+            rotation = Quaternion.IDENTITY;
+        }
+    }
 
-        exInt = exInt + ex * Ki;
-        eyInt = eyInt + ey * Ki;
-        ezInt = ezInt + ez * Ki;
-
-        // adjusted gyroscope measurements
-        gx = gx + Kp * ex + exInt;
-        gy = gy + Kp * ey + eyInt;
-        gz = gz + Kp * ez + ezInt;
-
-        // integrate quaternion rate and normalise
-        q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * halfT;
-        q1 = q1 + (q0 * gx + q2 * gz - q3 * gy) * halfT;
-        q2 = q2 + (q0 * gy - q1 * gz + q3 * gx) * halfT;
-        q3 = q3 + (q0 * gz + q1 * gy - q2 * gx) * halfT;
-
-        // normalise quaternion
-        norm = (float) Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-        q0 = q0 / norm;
-        q1 = q1 / norm;
-        q2 = q2 / norm;
-        q3 = q3 / norm;
-
-        yaw = (float) Math.atan2(2 * q1 * q2 + 2 * q0 * q3, -2 * q2 * q2 - 2 * q3 * q3 + 1) * 57.3f; // unit:degree
-        pitch = (float) Math.asin(-2 * q1 * q3 + 2 * q0 * q2) * 57.3f; // unit:degree
-        roll = (float) Math.atan2(2 * q2 * q3 + 2 * q0 * q1, -2 * q1 * q1 - 2 * q2 * q2 + 1) * 57.3f; // unit:degree
-        System.out.println("yaw:" + yaw + " pitch:" + pitch + " roll:" + roll);
+    public Vector3D getRotationVector() {
+        Rotation r = new Rotation(rotation.getQ0(), rotation.getQ1(), rotation.getQ2(), rotation.getQ3(), true);
+        // 提取欧拉角
+        double[] eulerAngles = r.getAngles(RotationOrder.XYZ);
+        double roll = Math.round(Math.toDegrees(eulerAngles[0]) * 1000.0) / 1000.0;  // 绕X轴的旋转角度（度数）
+        double pitch = Math.round(Math.toDegrees(eulerAngles[1]) * 1000.0) / 1000.0; // 绕Y轴的旋转角度（度数）
+        double yaw = Math.round(Math.toDegrees(eulerAngles[2]) * 1000.0) / 1000.0;   // 绕Z轴的旋转角度（度数）
+        return new Vector3D(roll, pitch, yaw);
     }
 }

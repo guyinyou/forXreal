@@ -107,6 +107,7 @@ public class UsbDeviceOpener {
                                 if (arknovvReport == null) {
                                     continue;
                                 }
+                                AAA.FUN_1800059e0(arknovvReport);
                                 System.out.println(arknovvReport);
                                 estimator.update(arknovvReport);
                             }
