@@ -24,6 +24,7 @@ public class AAA {
         byte[] bytes = Hex.hexStringToBytes(s);
         Reverse(bytes);
         float result = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+        System.out.println(s + " : " + result);
         return result;
     }
 
@@ -106,18 +107,18 @@ public class AAA {
         float fVar15;
         float fVar17;
 
-        fVar5 = report.acc_y - p("BD159E47");
-        fVar7 = report.acc_x - p("3C04B547");
-        fVar15 = report.acc_z - p("3D7E2E8A");
-        fVar17 = report.gyro_y - p("BC76846D");
-        fVar11 = report.gyro_z - p("3C07CA1B");
-        fVar13 = report.gyro_x - p("BB620EE6");
-        report.gyro_y = ((fVar17 * p("3F803ABF") + fVar11 * p("3B66167C") + fVar13 * p("3B71C5B8")) * 180.0f) / 3.1415925f;
-        report.acc_x = (fVar5 * p("3A3BF980") + fVar15 * p("39C5BB86") + fVar7 * p("3F7FD4A2")) / 9.81f;
-        report.acc_y = (fVar15 * p("3B1C947D") + fVar5 * p("3F801750") + fVar7 * p("80000000")) / 9.81f;
-        report.acc_z = (fVar15 * p("3F8024D1") + fVar5 * p("80000000") + fVar7 * 0) / 9.81f;
-        report.gyro_x = ((fVar17 * p("B7C52500") + fVar11 * p("3B87CA8E") + fVar13 * p("3F807471")) * 180.0f) / 3.1415925f;
-        report.gyro_z = ((fVar17 * p("BB2750DF") + fVar11 * p("3F8045AF") + fVar13 * p("BA51D2C8")) * 180.0f) / 3.1415925f;
+        fVar5 = report.acc_y - (-0.0365279f);
+        fVar7 = report.acc_x - (0.0080998605f);
+        fVar15 = report.acc_z - (0.0620561f);
+        fVar17 = report.gyro_y - (-0.015046221f);
+        fVar11 = report.gyro_z - (0.008287932f);
+        fVar13 = report.gyro_x - (-0.0034493743f);
+        report.gyro_y = ((fVar17 * (1.0017928f) + fVar11 * (0.0035108617f) + fVar13 * (0.0036891531f)) * 180.0f) / 3.1415925f;
+        report.acc_x = (fVar5 * (7.170662E-4f) + fVar15 * (3.7714484E-4f) + fVar7 * (0.99933827f)) / 9.81f;
+        report.acc_y = (fVar15 * (0.0023892217f) + fVar5 * (1.0007114f) + fVar7 * 0f) / 9.81f;
+        report.acc_z = (fVar15 * (1.0011235f) + fVar5 * 0f + fVar7 * 0f) / 9.81f;
+        report.gyro_x = ((fVar17 * (-2.350146E-5f) + fVar11 * (0.0041440194f) + fVar13 * (1.0035535f)) * 180.0f) / 3.1415925f;
+        report.gyro_z = ((fVar17 * (-0.002553038f) + fVar11 * (1.0021266f) + fVar13 * (-8.004126E-4f)) * 180.0f) / 3.1415925f;
     }
 
 }
