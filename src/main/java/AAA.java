@@ -1,3 +1,7 @@
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -12,6 +16,15 @@ public class AAA {
         System.out.println(arknovvReport);
         FUN_1800059e0(arknovvReport);
         System.out.println(arknovvReport);
+
+        {
+            AttitudeEstimator estimator = new AttitudeEstimator();
+            estimator.update(arknovvReport);
+
+            SocketClient client = new SocketClient(11000);
+            client.send(estimator.getQuaternion());
+            client.close();
+        }
     }
     public static void Reverse(byte[] bytes) {
         for (int i = 0; i < bytes.length / 2; i++) {
@@ -63,9 +76,9 @@ public class AAA {
 
         ArknovvReport arknovvReport = new ArknovvReport();
         arknovvReport.timestep = timeStep;
-        arknovvReport.gyro_x = g_x;
+        arknovvReport.gyro_x = g_z;
         arknovvReport.gyro_y = g_y;
-        arknovvReport.gyro_z = g_z;
+        arknovvReport.gyro_z = g_x;
         arknovvReport.acc_x = a_x;
         arknovvReport.acc_y = a_y;
         arknovvReport.acc_z = a_z;
@@ -110,15 +123,14 @@ public class AAA {
         fVar5 = report.acc_y - (-0.0365279f);
         fVar7 = report.acc_x - (0.0080998605f);
         fVar15 = report.acc_z - (0.0620561f);
-        fVar17 = report.gyro_y - (-0.015046221f);
-        fVar11 = report.gyro_z - (0.008287932f);
+        fVar17 = report.gyro_y - (-0.019f);
+        fVar11 = report.gyro_z - (-0.0018058877f);
         fVar13 = report.gyro_x - (-0.0034493743f);
-        report.gyro_y = ((fVar17 * (1.0017928f) + fVar11 * (0.0035108617f) + fVar13 * (0.0036891531f)) * 180.0f) / 3.1415925f;
+        report.gyro_y = ((fVar17 * (1.0017928f) + fVar11 * (0.0035108617f) + fVar13 * (0.0036891531f)) * 180.0f) / 3.1415925f - 0.10829288853f;
         report.acc_x = (fVar5 * (7.170662E-4f) + fVar15 * (3.7714484E-4f) + fVar7 * (0.99933827f)) / 9.81f;
         report.acc_y = (fVar15 * (0.0023892217f) + fVar5 * (1.0007114f) + fVar7 * 0f) / 9.81f;
         report.acc_z = (fVar15 * (1.0011235f) + fVar5 * 0f + fVar7 * 0f) / 9.81f;
-        report.gyro_x = ((fVar17 * (-2.350146E-5f) + fVar11 * (0.0041440194f) + fVar13 * (1.0035535f)) * 180.0f) / 3.1415925f;
-        report.gyro_z = ((fVar17 * (-0.002553038f) + fVar11 * (1.0021266f) + fVar13 * (-8.004126E-4f)) * 180.0f) / 3.1415925f;
+        report.gyro_x = ((fVar17 * (-2.350146E-5f) + fVar11 * (0.0041440194f) + fVar13 * (1.0035535f)) * 180.0f) / 3.1415925f - 0.699176547f;
+        report.gyro_z = ((fVar17 * (-0.002553038f) + fVar11 * (1.0021266f) + fVar13 * (-8.004126E-4f)) * 180.0f) / 3.1415925f - -0.032879382f;
     }
-
 }

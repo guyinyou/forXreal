@@ -1,105 +1,117 @@
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+import static java.lang.Math.PI;
+
 public class AttitudeEstimator {
-    private static final float ALPHA = 1f; // 互补滤波器常数
-    private long lastTimeStep = 0;
+    private static final float Kp = 1.0f; // proportional gain governs rate of convergence to accelerometer/magnetometer
 
-    // 四元数表示当前姿态
-    private float[] q = {1.0f, 0.0f, 0.0f, 0.0f};
+    private static final float Ki = 0.000f; // integral gain governs rate of convergence of gyroscope biases
 
+    private static final float halfT = 0.001f * 0.5f; // half the sample period
+    private float q0 = 0, q1 = 1, q2 = 0, q3 = 0; // quaternion elements representing the estimated orientation
+    private float q0_ = 0, q1_ = 1, q2_ = 0, q3_ = 0; // quaternion elements representing the estimated orientation
+    private long timestep = 0;
+    private static float exInt = 0, eyInt = 0, ezInt = 0; // scaled integral error
 
+    private float yaw = 0;
+    private float pitch = 0;
+    private float roll = 0;
+    private static final float deg2Rad = 3.1415925f / 180f;
 
-    public void update(AAA.ArknovvReport data) {
-        if (lastTimeStep == 0) {
-            lastTimeStep = data.timestep;
+    public void update(AAA.ArknovvReport report) {
+        this.IMU_Update(report.timestep, report.gyro_z, report.gyro_y, report.gyro_x, report.acc_x, report.acc_y, report.acc_z);
+    }
+    public void IMU_Update(long timestep, float gx, float gy, float gz, float ax, float ay, float az) {
+        this.timestep = timestep;
+
+        gx = gx * deg2Rad;
+        gy = gy * deg2Rad;
+        gz = gz * deg2Rad;
+
+        float norm;
+        float vx, vy, vz;
+        float ex, ey, ez;
+
+        float q0q0 = q0 * q0;
+        float q0q1 = q0 * q1;
+        float q0q2 = q0 * q2;
+        float q1q1 = q1 * q1;
+        float q1q3 = q1 * q3;
+        float q2q2 = q2 * q2;
+        float q2q3 = q2 * q3;
+        float q3q3 = q3 * q3;
+
+        if (ax * ay * az == 0) {
             return;
         }
 
-        float dt = (data.timestep - lastTimeStep) / 1f; // 时间步长（假设单位为微秒）
-        lastTimeStep = data.timestep;
+        norm = (float) Math.sqrt(ax * ax + ay * ay + az * az); //
+        ax = ax / norm;
+        ay = ay / norm;
+        az = az / norm;
 
-        // 归一化加速度计数据
-        float accNorm = (float) Math.sqrt(data.acc_x * data.acc_x + data.acc_y * data.acc_y + data.acc_z * data.acc_z);
-        if (accNorm > 0) {
-            data.acc_x /= accNorm;
-            data.acc_y /= accNorm;
-            data.acc_z /= accNorm;
-        }
+        // estimated direction of gravity and flux (v and w)
+        vx = 2 * (q1q3 - q0q2);
+        vy = 2 * (q0q1 + q2q3);
+        vz = q0q0 - q1q1 - q2q2 + q3q3;
 
-        // 使用陀螺仪数据更新四元数
-        float[] qGyro = integrateGyro(q, data.gyro_x, data.gyro_y, data.gyro_z, dt);
+        // error is sum of cross product between reference direction of fields and direction measured by sensors
+        ex = (ay * vz - az * vy);
+        ey = (az * vx - ax * vz);
+        ez = (ax * vy - ay * vx);
 
-        // 使用加速度计数据校正四元数
-        float[] accOrientation = calculateAccQuaternion(data.acc_x, data.acc_y, data.acc_z);
+        exInt = exInt + ex * Ki;
+        eyInt = eyInt + ey * Ki;
+        ezInt = ezInt + ez * Ki;
 
-        // 互补滤波器更新四元数
-        q = new float[]{
-            ALPHA * qGyro[0] + (1 - ALPHA) * accOrientation[0],
-            ALPHA * qGyro[1] + (1 - ALPHA) * accOrientation[1],
-            ALPHA * qGyro[2] + (1 - ALPHA) * accOrientation[2],
-            ALPHA * qGyro[3] + (1 - ALPHA) * accOrientation[3]
-        };
+        // adjusted gyroscope measurements
+        gx = gx + Kp * ex + exInt;
+        gy = gy + Kp * ey + eyInt;
+        gz = gz + Kp * ez + ezInt;
 
-        // 归一化四元数
-        normalizeQuaternion(q);
+        // integrate quaternion rate and normalise
+        q0 = q0 + (-q1 * gx - q2 * gy - q3 * gz) * halfT;
+        q1 = q1 + (q0 * gx + q2 * gz - q3 * gy) * halfT;
+        q2 = q2 + (q0 * gy - q1 * gz + q3 * gx) * halfT;
+        q3 = q3 + (q0 * gz + q1 * gy - q2 * gx) * halfT;
 
-        // 输出欧拉角结果
-        float[] eulerAngles = quaternionToEuler(q);
-        System.out.printf("Roll: %.2f, Pitch: %.2f, Yaw: %.2f%n",
-            Math.toDegrees(eulerAngles[0]), Math.toDegrees(eulerAngles[1]), Math.toDegrees(eulerAngles[2]));
+        float bl = 7.142857142857143f * 1.5f;
+        bl = 16.76f / 1;
+        q0_ = q0 + (-q1 * gx - q2 * gy - q3 * gz) * halfT * bl;
+        q1_ = q1 + (q0 * gx + q2 * gz - q3 * gy) * halfT * bl;
+        q2_ = q2 + (q0 * gy - q1 * gz + q3 * gx) * halfT * bl;
+        q3_ = q3 + (q0 * gz + q1 * gy - q2 * gx) * halfT * bl;
+
+        // normalise quaternion
+        norm = (float) Math.sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+        q0 = q0 / norm;
+        q1 = q1 / norm;
+        q2 = q2 / norm;
+        q3 = q3 / norm;
+
+        norm = (float) Math.sqrt(q0_ * q0_ + q1_ * q1_ + q2_ * q2_ + q3_ * q3_);
+        q0_ = q0_ / norm;
+        q1_ = q1_ / norm;
+        q2_ = q2_ / norm;
+        q3_ = q3_ / norm;
+
+//        yaw = (float) Math.atan2(2 * q1 * q2 + 2 * q0 * q3, -2 * q2 * q2 - 2 * q3 * q3 + 1) * 57.3f; // unit:degree
+//        pitch = (float) Math.asin(-2 * q1 * q3 + 2 * q0 * q2) * 57.3f; // unit:degree
+//        roll = (float) Math.atan2(2 * q2 * q3 + 2 * q0 * q1, -2 * q1 * q1 - 2 * q2 * q2 + 1) * 57.3f; // unit:degree
+//        System.out.println(q0 + " " + q1 + " " + q2 + " " + q3);
+//        System.out.println("yaw: " + yaw + " pitch: " + pitch + " roll: " + roll);
+//        System.out.println(q0 + " " + q1 + " " + q2 + " " + q3);
     }
 
-    private float[] integrateGyro(float[] q, float gyroX, float gyroY, float gyroZ, float dt) {
-        // 将陀螺仪数据从度/秒转为弧度/秒
-        float gyroXRad = (float) Math.toRadians(gyroX);
-        float gyroYRad = (float) Math.toRadians(gyroY);
-        float gyroZRad = (float) Math.toRadians(gyroZ);
-
-        // 计算四元数微小旋转量
-        float halfDt = 0.5f * dt;
-        float[] dq = new float[]{
-            0.0f,
-            gyroXRad * halfDt,
-            gyroYRad * halfDt,
-            gyroZRad * halfDt
-        };
-
-        float[] qGyro = new float[4];
-        qGyro[0] = q[0] - dq[1] * q[1] - dq[2] * q[2] - dq[3] * q[3];
-        qGyro[1] = q[0] * dq[1] + q[1] * dq[0] + dq[2] * q[3] - dq[3] * q[2];
-        qGyro[2] = q[0] * dq[2] - q[1] * dq[3] + q[2] * dq[0] + dq[3] * q[1];
-        qGyro[3] = q[0] * dq[3] + dq[1] * q[2] - dq[2] * q[1] + q[3] * dq[0];
-
-        // 归一化四元数
-        normalizeQuaternion(qGyro);
-        return qGyro;
-    }
-
-    private float[] calculateAccQuaternion(float accX, float accY, float accZ) {
-        float accPitch = (float) Math.atan2(-accX, Math.sqrt(accY * accY + accZ * accZ));
-        float accRoll = (float) Math.atan2(accY, accZ);
-
-        float q0 = (float) Math.cos(accPitch / 2) * (float) Math.cos(accRoll / 2);
-        float q1 = (float) Math.sin(accPitch / 2) * (float) Math.cos(accRoll / 2);
-        float q2 = (float) Math.cos(accPitch / 2) * (float) Math.sin(accRoll / 2);
-        float q3 = (float) Math.sin(accPitch / 2) * (float) Math.sin(accRoll / 2);
-
-        return new float[]{q0, q1, q2, q3};
-    }
-
-    private float[] quaternionToEuler(float[] q) {
-        float roll = (float) Math.atan2(2.0f * (q[0] * q[1] + q[2] * q[3]),
-            1.0f - 2.0f * (q[1] * q[1] + q[2] * q[2]));
-        float pitch = (float) Math.asin(2.0f * (q[0] * q[2] - q[3] * q[1]));
-        float yaw = (float) Math.atan2(2.0f * (q[0] * q[3] + q[1] * q[2]),
-            1.0f - 2.0f * (q[2] * q[2] + q[3] * q[3]));
-
-        return new float[]{roll, pitch, yaw};
-    }
-
-    private void normalizeQuaternion(float[] q) {
-        float norm = (float) Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
-        q[0] /= norm;
-        q[1] /= norm;
-        q[2] /= norm;
-        q[3] /= norm;
+    ByteBuffer buffer = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN);
+    public byte[] getQuaternion() {
+        buffer.clear();
+        buffer.putFloat(q0_);
+        buffer.putFloat(q1_);
+        buffer.putFloat(q2_);
+        buffer.putFloat(q3_);
+        buffer.putLong(this.timestep);
+        return buffer.array();
     }
 }

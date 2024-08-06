@@ -108,8 +108,17 @@ public class UsbDeviceOpener {
                                     continue;
                                 }
                                 AAA.FUN_1800059e0(arknovvReport);
-                                System.out.println(arknovvReport);
+////                                System.out.println(arknovvReport);
+//                                gx += arknovvReport.gyro_x;
+//                                gy += arknovvReport.gyro_y;
+//                                gz += arknovvReport.gyro_z;
+//                                gxCnt++;
+//                                gyCnt++;
+//                                gzCnt++;
+//                                System.out.println("gx: " + gx / gxCnt + " gy: " + gy / gyCnt + " gz: " + gz / gzCnt);
+////                                System.out.flush();
                                 estimator.update(arknovvReport);
+                                client.send(estimator.getQuaternion());
                             }
                         }).start();
                         Thread.sleep(300000);
@@ -130,7 +139,14 @@ public class UsbDeviceOpener {
             LibUsb.exit(context);
         }
     }
+    static float gx = 0;
+    static float gxCnt = 0;
+    static float gy = 0;
+    static float gyCnt = 0;
+    static float gz = 0;
+    static float gzCnt = 0;
     public static AttitudeEstimator estimator = new AttitudeEstimator();
+    static SocketClient client = new SocketClient(11000);
     public static Device findDevice(Context context, int vendorId, int productId) {
         DeviceList list = new DeviceList();
         int result = LibUsb.getDeviceList(context, list);
